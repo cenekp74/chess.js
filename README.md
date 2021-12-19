@@ -45,7 +45,7 @@ developers have had success integrating chess.js with the
 an example.
 
 ## API
-### .solochess.moves(options)
+### .solochess_moves(options)
 returns legal solochess moves in position (by standard solochess rules on chess.com)
 options same as .moves()
 ### Constructor: Chess([ fen ])
