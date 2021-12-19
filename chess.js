@@ -683,6 +683,84 @@ var Chess = function (fen) {
     return legal_moves
   }
 
+
+  function solochess_moves(options) {
+    function add_move(board, moves, from, to, flags) {
+      /* if pawn promotion */
+      if (
+        board[from].type === PAWN &&
+        (rank(to) === RANK_8 || rank(to) === RANK_1)
+      ) {
+        var pieces = [QUEEN, ROOK, BISHOP, KNIGHT]
+        for (var i = 0, len = pieces.length; i < len; i++) {
+          moves.push(build_move(board, from, to, flags, pieces[i]))
+        }
+      } else {
+        moves.push(build_move(board, from, to, flags))
+      }
+    }
+
+    var moves = []
+    var us = turn
+    var them = swap_color(us)
+    var second_rank = { b: RANK_7, w: RANK_2 }
+
+    var first_sq = SQUARES.a8
+    var last_sq = SQUARES.h1
+    var single_square = false
+
+    var piece_type =
+      typeof options !== 'undefined' &&
+      'piece' in options &&
+      typeof options.piece === 'string'
+        ? options.piece.toLowerCase()
+        : true
+
+    /* are we generating moves for a single square? */
+    if (typeof options !== 'undefined' && 'square' in options) {
+      if (options.square in SQUARES) {
+        first_sq = last_sq = SQUARES[options.square]
+        single_square = true
+      } else {
+        /* invalid square */
+        return []
+      }
+    }
+
+    for (var i = first_sq; i <= last_sq; i++) {
+      /* did we run off the end of the board */
+      if (i & 0x88) {
+        i += 7
+        continue
+      }
+
+      var piece = board[i]
+      if (piece == null || piece.color !== us) {
+        continue
+      }
+
+      if (piece_type === true || piece_type === piece.type) {
+        for (var j = 0, len = PIECE_OFFSETS[piece.type].length; j < len; j++) {
+          var offset = PIECE_OFFSETS[piece.type][j]
+          var square = i
+
+          while (true) {
+            square += offset
+            if (square & 0x88) break
+
+            if (board[square] == null) {
+              continue
+            } else {
+              add_move(board, moves, i, square, BITS.CAPTURE)
+              break
+            }
+          }
+        }
+      }
+    }
+    return moves
+  }
+
   /* convert a move from 0x88 coordinates to Standard Algebraic Notation
    * (SAN)
    *
@@ -1357,6 +1435,15 @@ var Chess = function (fen) {
      **************************************************************************/
     load: function (fen) {
       return load(fen)
+    },
+
+    solochess_moves: function(options) {
+      ugly_moves = solochess_moves(options)
+      moves = []
+      for (var i = 0, len = ugly_moves.length; i < len; i++) {
+        moves.push(make_pretty(ugly_moves[i]))
+      }
+      return moves
     },
 
     reset: function () {
