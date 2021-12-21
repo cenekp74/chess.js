@@ -160,6 +160,9 @@ var Chess = function (fen) {
   var history = []
   var header = {}
   var comments = {}
+  var movedPiecesSquares = []
+  var movesFens = []
+
 
   /* if the user passes in a fen string, load it, else default to
    * starting position
@@ -685,7 +688,7 @@ var Chess = function (fen) {
 
 
   function solochess_moves(options) {
-    function add_move(board, moves, from, to, flags) {
+    function add_move(board, uglyMoves, from, to, flags) {
       /* if pawn promotion */
       if (
         board[from].type === PAWN &&
@@ -693,39 +696,18 @@ var Chess = function (fen) {
       ) {
         var pieces = [QUEEN, ROOK, BISHOP, KNIGHT]
         for (var i = 0, len = pieces.length; i < len; i++) {
-          moves.push(build_move(board, from, to, flags, pieces[i]))
+          uglyMoves.push(build_move(board, from, to, flags, pieces[i]))
         }
       } else {
-        moves.push(build_move(board, from, to, flags))
+        uglyMoves.push(build_move(board, from, to, flags))
       }
     }
 
-    var moves = []
-    var us = turn
-    var them = swap_color(us)
-    var second_rank = { b: RANK_7, w: RANK_2 }
+    var uglyMoves = []
 
     var first_sq = SQUARES.a8
     var last_sq = SQUARES.h1
-    var single_square = false
-
-    var piece_type =
-      typeof options !== 'undefined' &&
-      'piece' in options &&
-      typeof options.piece === 'string'
-        ? options.piece.toLowerCase()
-        : true
-
-    /* are we generating moves for a single square? */
-    if (typeof options !== 'undefined' && 'square' in options) {
-      if (options.square in SQUARES) {
-        first_sq = last_sq = SQUARES[options.square]
-        single_square = true
-      } else {
-        /* invalid square */
-        return []
-      }
-    }
+    var piece_type = get(options['from'])['type']
 
     for (var i = first_sq; i <= last_sq; i++) {
       /* did we run off the end of the board */
@@ -735,15 +717,24 @@ var Chess = function (fen) {
       }
 
       var piece = board[i]
-      if (piece == null || piece.color !== us) {
+      if (piece == null) {
         continue
       }
+      if (piece.type === PAWN && (piece_type === true || piece_type === PAWN)) {
 
-      if (piece_type === true || piece_type === piece.type) {
+        /* pawn captures */
+        for (j = 2; j < 4; j++) {
+          var square = i + PAWN_OFFSETS['w'][j]
+          if (square & 0x88) continue
+
+          if (board[square] != null) {
+            add_move(board, uglyMoves, i, square, BITS.CAPTURE)
+          }
+        }
+      } else if (piece_type === true || piece_type === piece.type) {
         for (var j = 0, len = PIECE_OFFSETS[piece.type].length; j < len; j++) {
           var offset = PIECE_OFFSETS[piece.type][j]
           var square = i
-
           while (true) {
             square += offset
             if (square & 0x88) break
@@ -751,15 +742,60 @@ var Chess = function (fen) {
             if (board[square] == null) {
               continue
             } else {
-              add_move(board, moves, i, square, BITS.CAPTURE)
+              add_move(board, uglyMoves, i, square, BITS.CAPTURE)
               break
             }
           }
         }
       }
     }
+    moves = []
+    for (var i = 0, len = uglyMoves.length; i < len; i++) {
+      moves.push(make_pretty(uglyMoves[i]))
+    }
     return moves
   }
+
+  function solochess_move(options) {
+    var from = options['from']
+    var to = options['to']
+    var color
+    if (movedPiecesSquares.filter((square) => (square === from)).length === 2) {
+      return {isLegal:false, isOver:false}
+    }
+    legalMoves = solochess_moves({from:from})
+    if (legalMoves.some(move => move.from === from && move.to === to)) {
+      isLegal = true
+      captutingPieceType = get(from)['type']
+    } else {
+      return {isLegal:false, isOver:false}
+    }
+    if (movedPiecesSquares.filter((square) => (square === from)).length === 1) {
+      movedPiecesSquares = movedPiecesSquares.filter(square => (square !== from))
+      movedPiecesSquares = movedPiecesSquares.filter(square => (square !== to))
+      movedPiecesSquares.push(to, to)
+      color = 'b'
+    } else {
+        movedPiecesSquares = movedPiecesSquares.filter(square => (square !== from))
+        movedPiecesSquares = movedPiecesSquares.filter(square => (square !== to))
+        movedPiecesSquares.push(to)
+        color = 'w'
+    }
+
+    remove(from)
+    put({type:captutingPieceType, color:color}, to)
+
+    movesFens.push(generate_fen())
+
+    if ((board.filter(piece => (piece !== null)).length) === 1) {
+      isOver = true
+
+    } else {
+      isOver = false
+    }
+    return {isLegal:true, isOver:isOver}
+    }
+
 
   /* convert a move from 0x88 coordinates to Standard Algebraic Notation
    * (SAN)
@@ -1341,7 +1377,6 @@ var Chess = function (fen) {
   /* pretty = external move object */
   function make_pretty(ugly_move) {
     var move = clone(ugly_move)
-    move.san = move_to_san(move, generate_moves({ legal: true }))
     move.to = algebraic(move.to)
     move.from = algebraic(move.from)
 
@@ -1437,13 +1472,15 @@ var Chess = function (fen) {
       return load(fen)
     },
 
-    solochess_moves: function(options) {
-      ugly_moves = solochess_moves(options)
-      moves = []
-      for (var i = 0, len = ugly_moves.length; i < len; i++) {
-        moves.push(make_pretty(ugly_moves[i]))
+    solochess_move: function (data) {
+      return solochess_move(data)
+    },
+
+    movesFens: function (toWrite) {
+      if (toWrite) {
+        movesFens.push(toWrite)
       }
-      return moves
+      return movesFens
     },
 
     reset: function () {
