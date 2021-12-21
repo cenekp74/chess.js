@@ -35,6 +35,114 @@ while (!chess.game_over()) {
 }
 console.log(chess.pgn())
 ```
+Example of solochess adition in this fork (requires chessboard.js and jQuery):
+```
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function move(from, to, piece, newPos, oldPos) {
+    await sleep(0)
+    if (inTempBoard || inSolution) {
+        board.position(oldPos)
+        return
+    }
+    moveData = chess.solochess_move({from:from, to:to})
+    isLegal = moveData['isLegal']
+    if (isLegal) {
+        board.position(chess.fen())
+    } else {
+        board.position(chess.fen())
+    }
+    if (moveData['isOver']) {
+        onOver()
+    }
+}
+
+function back() {
+    if (inSolution) {
+        if ((solutionFens.length + movedBy) > 0) {
+            inTempBoard = true
+            movedBy = movedBy - 1
+            board.position(solutionFens[(solutionFens.length)+movedBy])
+        }
+    } else {
+        if ((chess.movesFens().length + movedBy)-1 > 0) {
+            if ((solutionFens.length + movedBy) > 0) {
+                inTempBoard = true
+                movedBy = movedBy - 1
+                board.position(chess.movesFens()[(chess.movesFens().length)+movedBy-1])
+                greyBoard('add')
+            }
+        }
+    console.log(movedBy)
+    }
+}
+
+function forw() {
+    if (movedBy < 0) {
+        movedBy = movedBy + 1
+    }
+    if (inSolution) {
+        board.position(solutionFens[(solutionFens.length)+movedBy])
+    } else{
+        board.position(chess.movesFens()[(chess.movesFens().length)+movedBy-1])
+        if (board.position('fen') === chess.fen().split(' ')[0]) {
+            inTempBoard = false
+            greyBoard('remove')
+        }
+    }
+    console.log(movedBy)
+}
+
+function solution() {
+    if (!(inSolution)) {
+        inSolution = true
+        movedBy = -(solutionFens.length)
+        greyBoard('add')
+    }
+    forw()
+}
+
+function greyBoard(action) {
+    if (action === 'add') {
+        var whiteSquareGrey = '#a9a9a9'
+        var blackSquareGrey = '#696969'
+        var files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+        var ranks = ['1', '2', '3', '4', '5', '6', '7', '8']
+        files.forEach(function(file) {
+            ranks.forEach(function(rank){
+                square = file + rank
+                var $square = $('#board .square-' + square)
+
+                var background = whiteSquareGrey
+                if ($square.hasClass('black-3c85d')) {
+                    background = blackSquareGrey
+                }
+                $square.css('background', background)
+            })
+        })
+    } else if (action === 'remove') {
+        $('#board .square-55d63').css('background', '')
+    }
+}
+
+const board = ChessBoard('board', {draggable:true, onDrop:move})
+board.position(FEN)
+var chess = new Chess(FEN)
+var socket = io();
+var inTempBoard = false
+var movedBy = 0
+var inSolution = false
+var solutionFens = "{{ SOLUTION }}".split(', ')
+solutionFens.forEach(function(solFen, index) {
+    this[index] = solFen.replace(/\[/g, '')
+    this[index] = this[index].replace(/\]/g, '')
+    this[index] = this[index].replace(/\&#39;/g, '')
+}, solutionFens)
+solutionFens.splice(0, 0, FEN)
+chess.movesFens(FEN)
+```
 
 ## User Interface
 
