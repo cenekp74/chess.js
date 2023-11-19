@@ -38,7 +38,7 @@ while (!chess.game_over()) {
 console.log(chess.pgn())
 ```
 Example of solochess adition in this fork (requires chessboard.js and jQuery):
-```
+```js
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
